@@ -4,13 +4,20 @@ namespace App\Controller;
 
 use App\Model\Data;
 use Nelmio\ApiDocBundle\Attribute\Model;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\HttpFoundation\JsonResponse;
-use Symfony\Component\Routing\Attribute\Route;
 use OpenApi\Attributes as OA;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Cache\Adapter\FilesystemAdapter;
+use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Routing\Attribute\Route;
 
 final class ProcessController extends AbstractController
 {
+    public function __construct(private readonly LockFactory $lockFactory)
+    {
+    }
+
     #[Route('/process-huge-dataset', name: 'app_process', methods: ['GET'])]
     #[OA\Response(
         response: 200,
@@ -22,7 +29,36 @@ final class ProcessController extends AbstractController
     )]
     public function process(): JsonResponse
     {
-        return $this->json($this->fetchData());
+        $cache = new FilesystemAdapter();
+        $lock = $this->lockFactory->createLock('data_fetch_lock');
+
+        $dataset = $cache->getItem('dataset');
+
+        if ($dataset->isHit()) {
+            return $this->json($dataset->get());
+        }
+
+        if (!$lock->acquire()) {
+            if ($dataset->isHit()) {
+                return $this->json($dataset->get(), Response::HTTP_OK, [
+                    'X-Cache-Status' => 'STALE',
+                ]);
+            }
+
+            return $this->json([],Response::HTTP_ACCEPTED);
+        }
+
+        try {
+            $data = $this->fetchData();
+
+            $dataset->set($data);
+            $dataset->expiresAfter(60);
+            $cache->save($dataset);
+
+            return $this->json($data);
+        } finally {
+            $lock->release();
+        }
     }
 
     private function fetchData(): array
