@@ -6,15 +6,18 @@ use App\Model\Data;
 use Nelmio\ApiDocBundle\Attribute\Model;
 use OpenApi\Attributes as OA;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\Cache\Adapter\FilesystemAdapter;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Contracts\Cache\CacheInterface;
 
 final class ProcessController extends AbstractController
 {
-    public function __construct(private readonly LockFactory $lockFactory)
+    public function __construct(
+        private readonly LockFactory $lockFactory,
+        private readonly CacheInterface $cache
+    )
     {
     }
 
@@ -29,23 +32,22 @@ final class ProcessController extends AbstractController
     )]
     public function process(): JsonResponse
     {
-        $cache = new FilesystemAdapter();
         $lock = $this->lockFactory->createLock('data_fetch_lock');
 
-        $dataset = $cache->getItem('dataset');
+        $dataset = $this->cache->getItem('dataset');
 
-        if ($dataset->isHit()) {
-            return $this->json($dataset->get());
-        }
+        $headers = [];
 
         if (!$lock->acquire()) {
-            if ($dataset->isHit()) {
-                return $this->json($dataset->get(), Response::HTTP_OK, [
-                    'X-Cache-Status' => 'STALE',
-                ]);
+            if (!$dataset->isHit()) {
+                return $this->json([],Response::HTTP_ACCEPTED);
             }
 
-            return $this->json([],Response::HTTP_ACCEPTED);
+            $headers = ['X-Cache-Status' => 'STALE'];
+        }
+
+        if ($dataset->isHit()) {
+            return $this->json($dataset->get(), Response::HTTP_OK, $headers);
         }
 
         try {
@@ -53,7 +55,7 @@ final class ProcessController extends AbstractController
 
             $dataset->set($data);
             $dataset->expiresAfter(60);
-            $cache->save($dataset);
+            $this->cache->save($dataset);
 
             return $this->json($data);
         } finally {
