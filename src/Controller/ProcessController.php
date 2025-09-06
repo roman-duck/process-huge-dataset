@@ -50,17 +50,15 @@ final class ProcessController extends AbstractController
             return $this->json($dataset->get(), Response::HTTP_OK, $headers);
         }
 
-        try {
-            $data = $this->fetchData();
+        $data = $this->fetchData();
 
-            $dataset->set($data);
-            $dataset->expiresAfter(60);
-            $this->cache->save($dataset);
+        $dataset->set($data);
+        $dataset->expiresAfter(60);
+        $this->cache->save($dataset);
 
-            return $this->json($data);
-        } finally {
-            $lock->release();
-        }
+        $lock->release();
+
+        return $this->json($data, Response::HTTP_OK, $headers);
     }
 
     private function fetchData(): array
