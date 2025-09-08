@@ -10,6 +10,7 @@
         "ext-ctype": "*",
         "ext-iconv": "*",
         "ext-curl": "*",
+        "ext-redis": "*",
         "nelmio/api-doc-bundle": "^5.6",
         "symfony/asset": "7.3.*",
         "symfony/cache": "7.3.*",

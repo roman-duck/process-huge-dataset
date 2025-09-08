@@ -22,7 +22,7 @@ jobs:
               run: docker exec dataset_app composer install --prefer-dist --no-progress
 
             - name: Run E2E tests
-              run: docker exec dataset_app php vendor/bin/phpunit  tests/E2E
+              run: docker exec dataset_app php vendor/bin/phpunit tests/E2E
 
             - name: Stop services
               run: docker compose down
