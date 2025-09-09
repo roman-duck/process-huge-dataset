@@ -2,7 +2,7 @@
 
 namespace App\Tests\E2E;
 
-use App\Service\DataService;
+use App\Model\Data;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\HttpClient\HttpClient;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
@@ -43,7 +43,7 @@ class ProcessHugeDatasetTest extends WebTestCase
     public function testStaleCache(): void
     {
         $dataset = [
-            'payload' => DataService::fetchData(),
+            'payload' => $this->fetchData(),
             'expires_at' => time() - 1,
         ];
 
@@ -64,5 +64,18 @@ class ProcessHugeDatasetTest extends WebTestCase
 
         $this->assertCount(1, $cacheStatuses);
         $this->assertEquals('STALE', $cacheStatuses[0]);
+    }
+
+    private function fetchData(): array
+    {
+        $data = [];
+        for ($i = 0; $i < 10000; $i++) {
+            $data[] = new Data(
+                date('c'),
+                rand(1, 9999),
+            );
+        }
+
+        return $data;
     }
 }
